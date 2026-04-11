@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: prepai
+    env: node
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm run server
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AUTH_USE_HTTPONLY_COOKIE
+        value: false
+      - key: FRONTEND_ORIGIN
+        value: https://prepai.onrender.com
+      - key: FRONTEND_URL
+        value: https://prepai.onrender.com
+      - key: BACKEND_URL
+        value: https://prepai.onrender.com
