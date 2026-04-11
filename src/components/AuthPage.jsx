@@ -2,6 +2,19 @@ import { memo, useState } from 'react'
 import { apiClient } from '../services/apiClient'
 import { storeAuth } from '../utils/authStorage'
 
+const AUTH_BASE_URL = (() => {
+  const configuredBase = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL
+  if (configuredBase) {
+    return configuredBase.replace(/\/api\/?$/, '')
+  }
+
+  if (import.meta.env.PROD && typeof window !== 'undefined') {
+    return window.location.origin
+  }
+
+  return 'http://localhost:4000'
+})()
+
 const AuthHeroPanel = memo(function AuthHeroPanel({ onBack }) {
   return (
     <section className="relative hidden overflow-hidden border-r border-zinc-200 bg-zinc-50 p-10 lg:flex lg:flex-col lg:justify-between">
@@ -111,7 +124,9 @@ export default function AuthPage({ onAuthenticated, onBack }) {
             <div className="mt-7 grid grid-cols-2 gap-3">
               <button
                 type="button"
-                onClick={() => window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/auth/google`}
+                onClick={() => {
+                  window.location.href = `${AUTH_BASE_URL}/api/auth/google`
+                }}
                 className="flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm font-semibold text-zinc-700 transition-all duration-150 hover:border-zinc-400 hover:bg-white active:scale-[0.98]"
                 title="Sign in with Google"
               >
@@ -125,7 +140,9 @@ export default function AuthPage({ onAuthenticated, onBack }) {
               </button>
               <button
                 type="button"
-                onClick={() => window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/auth/github`}
+                onClick={() => {
+                  window.location.href = `${AUTH_BASE_URL}/api/auth/github`
+                }}
                 className="flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm font-semibold text-zinc-700 transition-all duration-150 hover:border-zinc-400 hover:bg-white active:scale-[0.98]"
                 title="Sign in with GitHub"
               >
