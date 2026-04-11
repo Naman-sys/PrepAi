@@ -4,6 +4,7 @@ import cors from 'cors'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import cookieParser from 'cookie-parser'
+import Groq from 'groq-sdk'
 import { randomBytes } from 'crypto'
 import { existsSync } from 'fs'
 import path from 'path'
@@ -22,6 +23,10 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173'
 const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'prepai_auth_token'
 const USE_HTTP_ONLY_AUTH_COOKIE = String(process.env.AUTH_USE_HTTPONLY_COOKIE || 'false').toLowerCase() === 'true'
 const AUTH_COOKIE_SECURE = String(process.env.AUTH_COOKIE_SECURE || (process.env.NODE_ENV === 'production' ? 'true' : 'false')).toLowerCase() === 'true'
+const GROQ_API_KEY = process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY || ''
+const groqClient = GROQ_API_KEY
+  ? new Groq({ apiKey: GROQ_API_KEY })
+  : null
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000
 const oauthStateStore = new Map()
 const __filename = fileURLToPath(import.meta.url)
@@ -110,6 +115,38 @@ app.use(express.static(distPath))
 
 app.get('/api/health', (_, res) => {
   res.json({ ok: true })
+})
+
+app.post('/api/ai/complete', async (req, res) => {
+  if (!groqClient) {
+    return res.status(400).json({ error: 'Groq API key is not configured on the server.' })
+  }
+
+  const messages = Array.isArray(req.body?.messages) ? req.body.messages : null
+  if (!messages || messages.length === 0) {
+    return res.status(400).json({ error: 'messages array is required.' })
+  }
+
+  const model = String(req.body?.model || 'llama-3.1-8b-instant')
+  const temperature = Number.isFinite(Number(req.body?.temperature)) ? Number(req.body.temperature) : 0.7
+  const max_tokens = Number.isFinite(Number(req.body?.max_tokens)) ? Number(req.body.max_tokens) : 300
+  const responseFormat = req.body?.response_format
+
+  try {
+    const completion = await groqClient.chat.completions.create({
+      model,
+      messages,
+      temperature,
+      max_tokens,
+      ...(responseFormat ? { response_format: responseFormat } : {}),
+    })
+
+    const reply = completion.choices?.[0]?.message?.content?.trim() || ''
+    return res.json({ reply })
+  } catch (error) {
+    console.error('[AI] Groq completion failed:', error)
+    return res.status(500).json({ error: error?.message || 'Connection error.' })
+  }
 })
 
 app.post('/api/auth/register', authLimiter, async (req, res) => {

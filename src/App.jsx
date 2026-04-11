@@ -14,7 +14,7 @@ import { clearAuth, getAuthToken, getStoredUser, storeAuth } from './utils/authS
 const CodingRoundScreen = lazy(() => import('./components/CodingRoundScreen'))
 const PAGE_EXIT_DURATION_MS = 140
 
-const HAS_API_KEY = Boolean(import.meta.env.VITE_GROQ_API_KEY)
+const HAS_API_KEY = true
 
 const CODING_REQUIRED_DOMAINS = new Set([
   'Software Engineering',

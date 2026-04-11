@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import Groq from 'groq-sdk'
 import { parseScoreResponse } from '../utils/scoreParser'
 
 const MODEL = 'llama-3.1-8b-instant'
@@ -64,15 +63,31 @@ Maintain context of the ongoing interview conversation.`
     { role: 'system', content: SYSTEM_PROMPT }
   ])
 
-  const client = useMemo(() => {
-    const apiKey = import.meta.env.VITE_GROQ_API_KEY
-    if (!apiKey) return null
-
-    return new Groq({
-      apiKey,
-      dangerouslyAllowBrowser: true,
-    })
+  const apiBaseUrl = useMemo(() => {
+    const configured = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:4000/api')
+    return configured.replace(/\/$/, '')
   }, [])
+
+  const requestCompletion = useCallback(async ({ messages, temperature, maxTokens, responseFormatJson }) => {
+    const response = await fetch(`${apiBaseUrl}/ai/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages,
+        model: MODEL,
+        temperature,
+        max_tokens: maxTokens,
+        ...(responseFormatJson ? { response_format: { type: 'json_object' } } : {}),
+      }),
+    })
+
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(data?.error || 'Connection error.')
+    }
+
+    return data?.reply || ''
+  }, [apiBaseUrl])
 
   const complete = useCallback(async ({
     prompt,
@@ -82,11 +97,6 @@ Maintain context of the ongoing interview conversation.`
     systemPromptOverride = null,
     responseFormatJson = false,
   }) => {
-    if (!client) {
-      setError('No API key configured. Add VITE_GROQ_API_KEY to your .env file.')
-      return null
-    }
-
     setError(null)
     setLoading(true)
 
@@ -107,15 +117,7 @@ Maintain context of the ongoing interview conversation.`
         ]
       }
 
-      const response = await client.chat.completions.create({
-        model: MODEL,
-        messages,
-        temperature,
-        max_tokens: maxTokens,
-        ...(responseFormatJson && { response_format: { type: 'json_object' } }),
-      })
-
-      const reply = response.choices?.[0]?.message?.content?.trim() || ''
+      const reply = await requestCompletion({ messages, temperature, maxTokens, responseFormatJson })
 
       if (useHistory) {
         // Add AI reply to history to maintain context
@@ -133,7 +135,7 @@ Maintain context of the ongoing interview conversation.`
     } finally {
       setLoading(false)
     }
-  }, [client])
+  }, [requestCompletion])
 
   // Reset conversation history (call between sessions)
   const resetConversation = useCallback(() => {
@@ -370,6 +372,6 @@ Number them 1, 2, 3. Keep each tip to one sentence. Be direct and practical.`
     summarizeCodingImprovements,
     summarizeImprovements,
     resetConversation,
-    hasApiKey: Boolean(client),
+    hasApiKey: true,
   }
 }
