@@ -108,7 +108,23 @@ app.use(cors({
   },
   credentials: true,
 }))
-app.use(helmet())
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-eval'", "'wasm-unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      fontSrc: ["'self'", 'data:'],
+      connectSrc: ["'self'", 'https:', 'wss:'],
+      mediaSrc: ["'self'", 'blob:'],
+      workerSrc: ["'self'", 'blob:'],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      frameAncestors: ["'self'"],
+    },
+  },
+}))
 app.use(cookieParser())
 app.use(express.json({ limit: '1mb' }))
 app.use(express.static(distPath))
