@@ -10,8 +10,17 @@ function distance(a, b) {
   return Math.hypot((a?.x || 0) - (b?.x || 0), (a?.y || 0) - (b?.y || 0))
 }
 
-const MEDIA_PIPE_CAMERA_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js'
-const MEDIA_PIPE_FACE_MESH_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js'
+const MEDIA_PIPE_CAMERA_URLS = [
+  '/mediapipe/camera_utils/camera_utils.js',
+  'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js',
+  'https://unpkg.com/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js',
+]
+
+const MEDIA_PIPE_FACE_MESH_URLS = [
+  '/mediapipe/face_mesh/face_mesh.js',
+  'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js',
+  'https://unpkg.com/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js',
+]
 
 function loadScriptOnce(src) {
   return new Promise((resolve, reject) => {
@@ -49,8 +58,37 @@ function loadScriptOnce(src) {
 async function ensureMediaPipeReady() {
   if (window.Camera && window.FaceMesh) return
 
-  await loadScriptOnce(MEDIA_PIPE_CAMERA_URL)
-  await loadScriptOnce(MEDIA_PIPE_FACE_MESH_URL)
+  let cameraLoaded = false
+  let cameraError = null
+  for (const url of MEDIA_PIPE_CAMERA_URLS) {
+    try {
+      await loadScriptOnce(url)
+      cameraLoaded = true
+      break
+    } catch (error) {
+      cameraError = error
+    }
+  }
+
+  if (!cameraLoaded) {
+    throw cameraError || new Error('Failed to load MediaPipe camera utils.')
+  }
+
+  let faceMeshLoaded = false
+  let faceMeshError = null
+  for (const url of MEDIA_PIPE_FACE_MESH_URLS) {
+    try {
+      await loadScriptOnce(url)
+      faceMeshLoaded = true
+      break
+    } catch (error) {
+      faceMeshError = error
+    }
+  }
+
+  if (!faceMeshLoaded) {
+    throw faceMeshError || new Error('Failed to load MediaPipe face mesh.')
+  }
 }
 
 export default function useCamera() {
@@ -136,8 +174,10 @@ export default function useCamera() {
       }
 
       const faceMesh = new FaceMeshCtor({
-        locateFile: (file) =>
-          `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/${file}`,
+        locateFile: (file) => {
+          // Prefer assets hosted by this app to avoid CDN/network restrictions.
+          return `/mediapipe/face_mesh/${file}`
+        },
       })
 
       faceMesh.setOptions({
