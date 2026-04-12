@@ -7,6 +7,7 @@ export default function CameraPanel({
   eyeContact,
   confidence,
   wpm,
+  cameraError,
 }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -41,6 +42,12 @@ export default function CameraPanel({
           </div>
         )}
       </div>
+
+      {cameraError && (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {cameraError}
+        </div>
+      )}
 
       {!permissionDenied && !isEnabled && (
         <div className="mt-3 text-right">

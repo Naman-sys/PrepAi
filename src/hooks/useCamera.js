@@ -14,6 +14,7 @@ export default function useCamera() {
   const videoRef = useRef(null)
   const cameraRef = useRef(null)
   const faceMeshRef = useRef(null)
+  const frameLoopRef = useRef(null)
   const missFramesRef = useRef(0)
   const eyeContactRef = useRef(0)
   const eyeTimelineRef = useRef([])
@@ -23,6 +24,7 @@ export default function useCamera() {
   const [faceDetected, setFaceDetected] = useState(false)
   const [eyeContact, setEyeContact] = useState(0)
   const [confidence, setConfidence] = useState(0)
+  const [cameraError, setCameraError] = useState('')
   const eyeContactInstantRef = useRef(0)
 
   useEffect(() => {
@@ -41,6 +43,9 @@ export default function useCamera() {
   useEffect(() => {
     return () => {
       cameraRef.current?.stop()
+      if (frameLoopRef.current) {
+        window.cancelAnimationFrame(frameLoopRef.current)
+      }
       if (videoRef.current?.srcObject) {
         videoRef.current.srcObject.getTracks().forEach((track) => track.stop())
       }
@@ -51,13 +56,12 @@ export default function useCamera() {
     if (!videoRef.current) return
 
     try {
-      const FaceMeshCtor = window.FaceMesh
-      const CameraCtor = window.Camera
-      if (!FaceMeshCtor || !CameraCtor) {
-        throw new Error('MediaPipe camera modules are unavailable')
-      }
-
+      setCameraError('')
       cameraRef.current?.stop()
+      if (frameLoopRef.current) {
+        window.cancelAnimationFrame(frameLoopRef.current)
+        frameLoopRef.current = null
+      }
       if (videoRef.current?.srcObject) {
         videoRef.current.srcObject.getTracks().forEach((track) => track.stop())
       }
@@ -68,9 +72,23 @@ export default function useCamera() {
       })
 
       videoRef.current.srcObject = stream
+      try {
+        await videoRef.current.play()
+      } catch {
+        // Some browsers auto-play video only after the stream is attached; keep going.
+      }
       setPermissionDenied(false)
       setIsEnabled(true)
       missFramesRef.current = 0
+
+      const FaceMeshCtor = window.FaceMesh
+      if (!FaceMeshCtor) {
+        setCameraError('Camera preview is on, but face tracking could not load. Reload the page and try again.')
+        setFaceDetected(false)
+        setConfidence(0)
+        setEyeContact(0)
+        return
+      }
 
       const faceMesh = new FaceMeshCtor({
         locateFile: (file) =>
@@ -84,7 +102,10 @@ export default function useCamera() {
         minTrackingConfidence: 0.35,
       })
 
+      faceMeshRef.current = faceMesh
+
       let smoothedConfidence = 0
+      let lastVideoTime = -1
 
       faceMesh.onResults((results) => {
         const landmarks = results.multiFaceLandmarks?.[0]
@@ -129,29 +150,36 @@ export default function useCamera() {
         setConfidence(smoothedConfidence)
       })
 
-      faceMeshRef.current = faceMesh
+      const tick = async () => {
+        if (!videoRef.current || videoRef.current.readyState < 2) {
+          frameLoopRef.current = window.requestAnimationFrame(tick)
+          return
+        }
 
-      const camera = new CameraCtor(videoRef.current, {
-        onFrame: async () => {
-          if (videoRef.current) {
-            try {
-              await faceMesh.send({ image: videoRef.current })
-            } catch {
-              // Keep camera stream alive if a frame occasionally fails.
-            }
+        if (videoRef.current.currentTime !== lastVideoTime) {
+          lastVideoTime = videoRef.current.currentTime
+          try {
+            await faceMesh.send({ image: videoRef.current })
+          } catch {
+            // Keep the preview alive if a frame occasionally fails.
           }
-        },
-        width: 640,
-        height: 480,
-        facingMode: 'user',
-      })
+        }
 
-      cameraRef.current = camera
-      await camera.start()
+        frameLoopRef.current = window.requestAnimationFrame(tick)
+      }
+
+      frameLoopRef.current = window.requestAnimationFrame(tick)
     } catch (error) {
-      setPermissionDenied(true)
+      const message = error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError'
+        ? 'Camera permission was denied. Please allow camera access in the browser.'
+        : error?.message || 'Camera could not start.'
+
+      setCameraError(message)
+      setPermissionDenied(Boolean(error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError'))
       setIsEnabled(false)
       setFaceDetected(false)
+      setConfidence(0)
+      setEyeContact(0)
     }
   }, [])
 
@@ -164,5 +192,6 @@ export default function useCamera() {
     eyeContact,
     confidence,
     eyeTimeline: eyeTimelineRef.current,
+    cameraError,
   }
 }

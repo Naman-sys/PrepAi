@@ -91,6 +91,7 @@ export default function InterviewScreen({
     eyeContact,
     confidence,
     eyeTimeline,
+    cameraError,
   } = useCamera()
 
   const {
@@ -582,6 +583,7 @@ export default function InterviewScreen({
           eyeContact={eyeContact}
           confidence={confidence}
           wpm={wpm}
+          cameraError={cameraError}
         />
         <AIPanel
           isAISpeaking={isAISpeaking || speech.isSpeaking}
