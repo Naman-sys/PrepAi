@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Editor from '@monaco-editor/react'
+import { loader } from '@monaco-editor/react'
+import * as monaco from 'monaco-editor'
+import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
+import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
+import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
+import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
+import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import useGroq from '../hooks/useGroq'
 
 const COUNT_BY_DIFFICULTY = {
@@ -167,6 +174,22 @@ export default function CodingRoundScreen({
   const timeLimitSeconds = TIME_BY_DIFFICULTY_SECONDS[selectedDifficulty] || 600
   const autosaveId = `${selectedDomain}::${selectedDifficulty}::${selectedLanguage?.name || 'English'}`
   const legacyAutosaveId = `${selectedDomain}::${selectedDifficulty}`
+
+  useEffect(() => {
+    loader.config({ monaco })
+
+    if (typeof window !== 'undefined') {
+      window.MonacoEnvironment = {
+        getWorker(_, label) {
+          if (label === 'json') return new jsonWorker()
+          if (label === 'css' || label === 'scss' || label === 'less') return new cssWorker()
+          if (label === 'html' || label === 'handlebars' || label === 'razor') return new htmlWorker()
+          if (label === 'typescript' || label === 'javascript') return new tsWorker()
+          return new editorWorker()
+        },
+      }
+    }
+  }, [])
 
   useEffect(() => {
     let mounted = true
