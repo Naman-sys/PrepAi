@@ -10,6 +10,49 @@ function distance(a, b) {
   return Math.hypot((a?.x || 0) - (b?.x || 0), (a?.y || 0) - (b?.y || 0))
 }
 
+const MEDIA_PIPE_CAMERA_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js'
+const MEDIA_PIPE_FACE_MESH_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js'
+
+function loadScriptOnce(src) {
+  return new Promise((resolve, reject) => {
+    if (typeof document === 'undefined') {
+      reject(new Error('Document is not available.'))
+      return
+    }
+
+    const existing = document.querySelector(`script[data-src="${src}"]`)
+    if (existing) {
+      if (existing.getAttribute('data-loaded') === 'true') {
+        resolve()
+        return
+      }
+
+      existing.addEventListener('load', () => resolve(), { once: true })
+      existing.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true })
+      return
+    }
+
+    const script = document.createElement('script')
+    script.src = src
+    script.async = true
+    script.defer = true
+    script.dataset.src = src
+    script.onload = () => {
+      script.setAttribute('data-loaded', 'true')
+      resolve()
+    }
+    script.onerror = () => reject(new Error(`Failed to load ${src}`))
+    document.head.appendChild(script)
+  })
+}
+
+async function ensureMediaPipeReady() {
+  if (window.Camera && window.FaceMesh) return
+
+  await loadScriptOnce(MEDIA_PIPE_CAMERA_URL)
+  await loadScriptOnce(MEDIA_PIPE_FACE_MESH_URL)
+}
+
 export default function useCamera() {
   const videoRef = useRef(null)
   const cameraRef = useRef(null)
@@ -81,9 +124,11 @@ export default function useCamera() {
       setIsEnabled(true)
       missFramesRef.current = 0
 
+      await ensureMediaPipeReady()
+
       const FaceMeshCtor = window.FaceMesh
       if (!FaceMeshCtor) {
-        setCameraError('Camera preview is on, but face tracking could not load. Reload the page and try again.')
+        setCameraError('Face tracking could not load. Reload the page and try again.')
         setFaceDetected(false)
         setConfidence(0)
         setEyeContact(0)
