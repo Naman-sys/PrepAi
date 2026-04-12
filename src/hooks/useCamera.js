@@ -10,17 +10,8 @@ function distance(a, b) {
   return Math.hypot((a?.x || 0) - (b?.x || 0), (a?.y || 0) - (b?.y || 0))
 }
 
-const MEDIA_PIPE_CAMERA_URLS = [
-  '/mediapipe/camera_utils/camera_utils.js',
-  'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js',
-  'https://unpkg.com/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js',
-]
-
-const MEDIA_PIPE_FACE_MESH_URLS = [
-  '/mediapipe/face_mesh/face_mesh.js',
-  'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js',
-  'https://unpkg.com/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js',
-]
+const MEDIA_PIPE_CAMERA_URL = '/mediapipe/camera_utils/camera_utils.js'
+const MEDIA_PIPE_FACE_MESH_URL = '/mediapipe/face_mesh/face_mesh.js'
 
 function loadScriptOnce(src) {
   return new Promise((resolve, reject) => {
@@ -43,8 +34,8 @@ function loadScriptOnce(src) {
 
     const script = document.createElement('script')
     script.src = src
-    script.async = true
-    script.defer = true
+    script.async = false
+    script.defer = false
     script.dataset.src = src
     script.onload = () => {
       script.setAttribute('data-loaded', 'true')
@@ -58,36 +49,11 @@ function loadScriptOnce(src) {
 async function ensureMediaPipeReady() {
   if (window.Camera && window.FaceMesh) return
 
-  let cameraLoaded = false
-  let cameraError = null
-  for (const url of MEDIA_PIPE_CAMERA_URLS) {
-    try {
-      await loadScriptOnce(url)
-      cameraLoaded = true
-      break
-    } catch (error) {
-      cameraError = error
-    }
-  }
+  await loadScriptOnce(MEDIA_PIPE_CAMERA_URL)
+  await loadScriptOnce(MEDIA_PIPE_FACE_MESH_URL)
 
-  if (!cameraLoaded) {
-    throw cameraError || new Error('Failed to load MediaPipe camera utils.')
-  }
-
-  let faceMeshLoaded = false
-  let faceMeshError = null
-  for (const url of MEDIA_PIPE_FACE_MESH_URLS) {
-    try {
-      await loadScriptOnce(url)
-      faceMeshLoaded = true
-      break
-    } catch (error) {
-      faceMeshError = error
-    }
-  }
-
-  if (!faceMeshLoaded) {
-    throw faceMeshError || new Error('Failed to load MediaPipe face mesh.')
+  if (!window.Camera || !window.FaceMesh) {
+    throw new Error('MediaPipe runtime is not available from local assets.')
   }
 }
 
@@ -107,6 +73,12 @@ export default function useCamera() {
   const [confidence, setConfidence] = useState(0)
   const [cameraError, setCameraError] = useState('')
   const eyeContactInstantRef = useRef(0)
+
+  useEffect(() => {
+    ensureMediaPipeReady().catch((error) => {
+      setCameraError(error?.message || 'Failed to load local MediaPipe runtime files.')
+    })
+  }, [])
 
   useEffect(() => {
     let timer = null
@@ -183,8 +155,9 @@ export default function useCamera() {
       faceMesh.setOptions({
         maxNumFaces: 1,
         refineLandmarks: true,
-        minDetectionConfidence: 0.35,
-        minTrackingConfidence: 0.35,
+        minDetectionConfidence: 0.15,
+        minTrackingConfidence: 0.15,
+        useCpuInference: true,
       })
 
       faceMeshRef.current = faceMesh
@@ -199,6 +172,8 @@ export default function useCamera() {
           missFramesRef.current += 1
           if (missFramesRef.current > 40) {
             setFaceDetected(false)
+            setEyeContact(0)
+            setConfidence(0)
           }
           return
         }
@@ -245,8 +220,8 @@ export default function useCamera() {
           lastVideoTime = videoRef.current.currentTime
           try {
             await faceMesh.send({ image: videoRef.current })
-          } catch {
-            // Keep the preview alive if a frame occasionally fails.
+          } catch (error) {
+            setCameraError(error?.message || 'Face tracking runtime error.')
           }
         }
 
